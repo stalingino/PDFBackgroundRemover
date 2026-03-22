@@ -299,6 +299,17 @@ fileInput.addEventListener('change', () => {
 
 let resultData = null;
 
+async function saveFile(url) {
+  const status = document.getElementById('status');
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    status.textContent = data.message;
+  } catch (e) {
+    status.textContent = 'Save error: ' + e.message;
+  }
+}
+
 async function processFiles() {
   const btn = processBtn;
   const spinner = document.getElementById('spinner');
@@ -326,12 +337,12 @@ async function processFiles() {
       showFilePreviews(0);
 
       const dl = document.getElementById('downloads');
-      dl.innerHTML = '<div style="margin-bottom:6px;font-weight:600;">Download:</div>';
+      dl.innerHTML = '<div style="margin-bottom:6px;font-weight:600;">Save to Downloads:</div>';
       if (data.files.length > 1) {
-        dl.innerHTML += '<a class="download-link" href="/download-all">All files (zip)</a> ';
+        dl.innerHTML += '<button class="download-link" onclick="saveFile(\\'/download-all\\')">All files (zip)</button> ';
       }
       data.files.forEach((f, i) => {
-        dl.innerHTML += '<a class="download-link" href="/download/' + i + '">' + f.name + '</a> ';
+        dl.innerHTML += '<button class="download-link" onclick="saveFile(\\'/download/' + i + '\\')">' + f.name + '</button> ';
       });
     }
   } catch (e) {
@@ -459,10 +470,24 @@ def preview(file_idx, page_idx):
     })
 
 
+def _save_to_desktop(src, name):
+    """Copy file to Desktop (or Downloads) automatically."""
+    import shutil
+    for folder in ("Downloads", "Desktop"):
+        d = os.path.join(os.path.expanduser("~"), folder)
+        if os.path.isdir(d):
+            shutil.copy2(src, os.path.join(d, name))
+            return
+
+
 @app.route("/download/<int:file_idx>")
 def download(file_idx):
     info = session["files"][file_idx]
-    return send_file(info["output_path"], as_attachment=True, download_name=info["name"])
+    _save_to_desktop(info["output_path"], info["name"])
+    # return send_file(info["output_path"], as_attachment=True, download_name=info["name"])
+    return jsonify({
+        "message": "Saved to Desktop/Downloads: " + info["name"],
+    })
 
 
 @app.route("/download-all")
@@ -472,7 +497,11 @@ def download_all():
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for info in session["files"]:
             zf.write(info["output_path"], info["name"])
-    return send_file(zip_path, as_attachment=True, download_name="print_ready_all.zip")
+    _save_to_desktop(zip_path, "print_ready_all.zip")
+    # return send_file(zip_path, as_attachment=True, download_name="print_ready_all.zip")
+    return jsonify({
+        "message": "Saved to Desktop/Downloads: " + info["name"],
+    })
 
 
 def find_free_port():
@@ -510,6 +539,8 @@ if __name__ == "__main__":
 
     try:
         import webview
+        # This must be set BEFORE create_window
+        webview.settings['ALLOW_DOWNLOADS'] = True
 
         window = webview.create_window(
             "PDF Background Remover",

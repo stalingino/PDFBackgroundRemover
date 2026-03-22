@@ -14,7 +14,25 @@
       "Bash(rm -rf build dist *.spec)",
       "Bash(pyinstaller --onefile --windowed --name \"PDFBackgroundRemover\" --icon app.icns --hidden-import=fitz --hidden-import=fitz_old --hidden-import=pymupdf --hidden-import=numpy --hidden-import=PIL --hidden-import=webview --hidden-import=flask --hidden-import=jinja2 --hidden-import=jinja2.ext app.py)",
       "Bash(pyinstaller --onedir --windowed --name \"PDFBackgroundRemover\" --icon app.icns --hidden-import=fitz --hidden-import=fitz_old --hidden-import=pymupdf --hidden-import=numpy --hidden-import=PIL --hidden-import=webview --hidden-import=flask --hidden-import=jinja2 --hidden-import=jinja2.ext --hidden-import=werkzeug --hidden-import=werkzeug.serving app.py)",
-      "Bash(pkill -f PDFBackgroundRemover)"
+      "Bash(pkill -f PDFBackgroundRemover)",
+      "Bash(zip -r PDFBackgroundRemover-mac.zip PDFBackgroundRemover.app)",
+      "Bash(git checkout:*)",
+      "Bash(pkill -9 -f PDFBackgroundRemover)",
+      "Bash(rm -rf /Users/gino/works/tools/pdf-object-editor/build /Users/gino/works/tools/pdf-object-editor/dist /Users/gino/works/tools/pdf-object-editor/*.spec)",
+      "Bash(pyinstaller --onedir --windowed --name PDFBackgroundRemover --icon app.icns --hidden-import=fitz --hidden-import=fitz_old --hidden-import=pymupdf --hidden-import=numpy --hidden-import=PIL --hidden-import=webview --hidden-import=flask --hidden-import=jinja2 --hidden-import=jinja2.ext --hidden-import=werkzeug --hidden-import=werkzeug.serving app.py)",
+      "Bash(chmod +x /Users/gino/works/tools/pdf-object-editor/build.sh)",
+      "Bash(plutil -p dist/PDFBackgroundRemover.app/Contents/Info.plist)",
+      "Bash(PLIST=\"dist/PDFBackgroundRemover.app/Contents/Info.plist\")",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSDocumentsFolderUsageDescription string ''PDF Background Remover needs access to open and save PDF files.''\" \"$PLIST\")",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSDesktopFolderUsageDescription string ''PDF Background Remover needs access to save processed PDF files to your Desktop.''\" \"$PLIST\")",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSDownloadsFolderUsageDescription string ''PDF Background Remover needs access to save processed PDF files to Downloads.''\" \"$PLIST\")",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSFileProviderPresenceUsageDescription string ''PDF Background Remover needs file access to process PDFs.''\" \"$PLIST\")",
+      "Bash(codesign --force --deep --sign - \"dist/PDFBackgroundRemover.app\")",
+      "Bash(PLIST=dist/PDFBackgroundRemover.app/Contents/Info.plist)",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSDocumentsFolderUsageDescription string ''''PDF Background Remover needs access to open and save PDF files.''''\" $PLIST)",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSDesktopFolderUsageDescription string ''''PDF Background Remover needs access to save processed PDF files.''''\" $PLIST)",
+      "Bash(/usr/libexec/PlistBuddy -c \"Add :NSDownloadsFolderUsageDescription string ''''PDF Background Remover needs access to save processed PDF files to Downloads.''''\" $PLIST)",
+      "Bash(codesign --force --deep --sign - dist/PDFBackgroundRemover.app)"
     ]
   }
 }
