@@ -299,12 +299,29 @@ fileInput.addEventListener('change', () => {
 
 let resultData = null;
 
-async function saveFile(url) {
+async function saveFile(idx) {
   const status = document.getElementById('status');
   try {
-    const resp = await fetch(url);
-    const data = await resp.json();
-    status.textContent = data.message;
+    if (window.pywebview) {
+      const data = await pywebview.api.save_file(idx);
+      status.textContent = data.message;
+    } else {
+      window.open('/download/' + idx);
+    }
+  } catch (e) {
+    status.textContent = 'Save error: ' + e.message;
+  }
+}
+
+async function saveAll() {
+  const status = document.getElementById('status');
+  try {
+    if (window.pywebview) {
+      const data = await pywebview.api.save_all();
+      status.textContent = data.message;
+    } else {
+      window.open('/download-all');
+    }
   } catch (e) {
     status.textContent = 'Save error: ' + e.message;
   }
@@ -337,12 +354,12 @@ async function processFiles() {
       showFilePreviews(0);
 
       const dl = document.getElementById('downloads');
-      dl.innerHTML = '<div style="margin-bottom:6px;font-weight:600;">Save to Downloads:</div>';
+      dl.innerHTML = '<div style="margin-bottom:6px;font-weight:600;">Save:</div>';
       if (data.files.length > 1) {
-        dl.innerHTML += '<button class="download-link" onclick="saveFile(\\'/download-all\\')">All files (zip)</button> ';
+        dl.innerHTML += '<button class="download-link" onclick="saveAll()">All files (zip)</button> ';
       }
       data.files.forEach((f, i) => {
-        dl.innerHTML += '<button class="download-link" onclick="saveFile(\\'/download/' + i + '\\')">' + f.name + '</button> ';
+        dl.innerHTML += '<button class="download-link" onclick="saveFile(' + i + ')">' + f.name + '</button> ';
       });
     }
   } catch (e) {
@@ -470,24 +487,10 @@ def preview(file_idx, page_idx):
     })
 
 
-def _save_to_desktop(src, name):
-    """Copy file to Desktop (or Downloads) automatically."""
-    import shutil
-    for folder in ("Downloads", "Desktop"):
-        d = os.path.join(os.path.expanduser("~"), folder)
-        if os.path.isdir(d):
-            shutil.copy2(src, os.path.join(d, name))
-            return
-
-
 @app.route("/download/<int:file_idx>")
 def download(file_idx):
     info = session["files"][file_idx]
-    _save_to_desktop(info["output_path"], info["name"])
-    # return send_file(info["output_path"], as_attachment=True, download_name=info["name"])
-    return jsonify({
-        "message": "Saved to Desktop/Downloads: " + info["name"],
-    })
+    return send_file(info["output_path"], as_attachment=True, download_name=info["name"])
 
 
 @app.route("/download-all")
@@ -497,11 +500,7 @@ def download_all():
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for info in session["files"]:
             zf.write(info["output_path"], info["name"])
-    _save_to_desktop(zip_path, "print_ready_all.zip")
-    # return send_file(zip_path, as_attachment=True, download_name="print_ready_all.zip")
-    return jsonify({
-        "message": "Saved to Desktop/Downloads: " + info["name"],
-    })
+    return send_file(zip_path, as_attachment=True, download_name="print_ready_all.zip")
 
 
 def find_free_port():
@@ -539,8 +538,39 @@ if __name__ == "__main__":
 
     try:
         import webview
-        # This must be set BEFORE create_window
-        webview.settings['ALLOW_DOWNLOADS'] = True
+        import shutil
+
+        def save_file(file_idx):
+            """Called from JS via pywebview.api.save_file(idx)"""
+            info = session["files"][int(file_idx)]
+            result = window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory=os.path.expanduser("~/Downloads"),
+                save_filename=info["name"],
+            )
+            if result:
+                dest = result if isinstance(result, str) else result[0]
+                shutil.copy2(info["output_path"], dest)
+                return {"message": "Saved to: " + dest}
+            return {"message": "Save cancelled"}
+
+        def save_all():
+            """Called from JS via pywebview.api.save_all()"""
+            import zipfile
+            zip_tmp = os.path.join(OUTPUT_DIR, "print_ready_all.zip")
+            with zipfile.ZipFile(zip_tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+                for info in session["files"]:
+                    zf.write(info["output_path"], info["name"])
+            result = window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory=os.path.expanduser("~/Downloads"),
+                save_filename="print_ready_all.zip",
+            )
+            if result:
+                dest = result if isinstance(result, str) else result[0]
+                shutil.copy2(zip_tmp, dest)
+                return {"message": "Saved to: " + dest}
+            return {"message": "Save cancelled"}
 
         window = webview.create_window(
             "PDF Background Remover",
@@ -549,6 +579,7 @@ if __name__ == "__main__":
             height=850,
             min_size=(800, 600),
         )
+        window.expose(save_file, save_all)
         webview.start(gui="cef" if sys.platform == "win32" else None)
     except ImportError:
         import webbrowser
