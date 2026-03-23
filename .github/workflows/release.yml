@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag (e.g. v1.1.0)'
+        required: true
+        default: 'v1.1.0'
+
+jobs:
+  # ── Android ────────────────────────────────────────────────────────────
+  android:
+    name: Android APK (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - variant: debug
+            task: assembleDebug
+            apk_path: android/app/build/outputs/apk/debug/app-debug.apk
+            asset_name: PDFBackgroundRemover-android-debug.apk
+          - variant: release
+            task: assembleRelease
+            apk_path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+            asset_name: PDFBackgroundRemover-android-release-unsigned.apk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build ${{ matrix.variant }} APK
+        run: ./gradlew ${{ matrix.task }} --no-daemon
+        working-directory: android
+
+      - name: Rename APK to release asset name
+        run: cp ${{ matrix.apk_path }} ${{ matrix.asset_name }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+          retention-days: 90
+
+  # ── Desktop ────────────────────────────────────────────────────────────
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            asset_name: PDFBackgroundRemover-mac.zip
+            dist_glob: dist/PDFBackgroundRemover*
+            icon: app.icns
+          - os: windows-latest
+            asset_name: PDFBackgroundRemover-win.zip
+            dist_glob: dist/PDFBackgroundRemover*
+            icon: app.ico
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed \
+            --name "PDFBackgroundRemover" \
+            --icon "${{ matrix.icon }}" \
+            --hidden-import=fitz \
+            --hidden-import=fitz_old \
+            --hidden-import=pymupdf \
+            --hidden-import=numpy \
+            --hidden-import=PIL \
+            --hidden-import=webview \
+            --hidden-import=flask \
+            --hidden-import=jinja2 \
+            --hidden-import=jinja2.ext \
+            app.py
+
+      - name: Zip dist output (Unix)
+        if: runner.os != 'Windows'
+        run: cd dist && zip -r ../${{ matrix.asset_name }} .
+
+      - name: Zip dist output (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\* -DestinationPath ${{ matrix.asset_name }}
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+          retention-days: 90
+
+  # ── GitHub Release ─────────────────────────────────────────────────────
+  release:
+    name: Create Release
+    needs: [android, desktop]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -lh release-assets/
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: PDF Background Remover ${{ steps.tag.outputs.name }}
+          body: |
+            ## What's new in ${{ steps.tag.outputs.name }}
+
+            ### Android
+            - **Vector/object-level processing** — same engine as the desktop version (MuPDF / `com.artifex.mupdf:fitz`)
+            - No page rasterisation: content streams are edited in-place
+            - Strategy 1: replace background-coloured pixels in embedded images (DeviceRGB, DeviceGray, 8 bpc)
+            - Strategy 2: rewrite `rg/RG`, `g/G`, `k/K` colour operators in vector content streams
+            - MuPDF renders Before/After thumbnails directly from the modified PDF object graph
+            - `PDFDocument.save("compress,garbage=3")` output — mirrors Python `deflate=True, garbage=3`
+
+            ### Desktop
+            - No changes — macOS and Windows builds included for completeness
+
+            ### Install (Android)
+            Download `PDFBackgroundRemover-android-debug.apk`, enable *Install from unknown sources* and sideload.
+            The release APK is unsigned — sign it with your own keystore before distribution.
+          files: |
+            release-assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
