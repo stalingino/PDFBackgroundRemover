@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PDF Background Remover</string>
+    <string name="select_files">Select PDF Files</string>
+    <string name="choose_pdf_files">Choose PDF Files</string>
+    <string name="color_tolerance">Color Tolerance</string>
+    <string name="tolerance_hint">Higher tolerance removes more similar colors. Start with 0.30 and adjust if needed.</string>
+    <string name="exact">Exact</string>
+    <string name="aggressive">Aggressive</string>
+    <string name="remove_backgrounds">Remove Backgrounds</string>
+    <string name="reset">Reset</string>
+    <string name="processing">Processing…</string>
+    <string name="results">Results</string>
+    <string name="share_pdf">Share PDF</string>
+    <string name="share_all">Share All</string>
+</resources>
