@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+    # Pushing a branch named claude/release-vX.Y.Z also triggers a release.
+    # The version is extracted from the branch name automatically.
+    branches:
+      - 'claude/release-v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -139,7 +143,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF_NAME}" == claude/release-* ]]; then
+            # Branch push: extract version from branch name (claude/release-v1.2.0 → v1.2.0)
+            echo "name=${GITHUB_REF_NAME#claude/release-}" >> $GITHUB_OUTPUT
           else
+            # Tag push: use tag name directly
             echo "name=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
 
